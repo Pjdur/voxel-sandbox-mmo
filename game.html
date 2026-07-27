@@ -392,8 +392,6 @@
             document.getElementById('block-selector').style.display = 'none';
         });
 
-        scene.add(controls.getObject());
-
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
         let velocity = new THREE.Vector3();
         const gravity = 40.0, speed = 10.0, jumpVelocity = 15.0;
@@ -501,44 +499,45 @@
             prevTime = time;
 
             if (controls.isLocked) {
-                const moveDir = new THREE.Vector3();
-                if (moveForward) moveDir.z -= 1;
-                if (moveBackward) moveDir.z += 1;
-                if (moveRight) moveDir.x += 1;
-                if (moveLeft) moveDir.x -= 1;
-                moveDir.normalize();
+                // FIX: Use PointerLockControls built-in native relative movement functions
+                const moveStep = speed * delta;
 
-                const camRot = new THREE.Euler(0, camera.rotation.y, 0, 'YXZ');
-                moveDir.applyEuler(camRot);
+                if (moveForward) {
+                    controls.moveForward(moveStep);
+                    if (checkCollision(camera.position)) controls.moveForward(-moveStep);
+                }
+                if (moveBackward) {
+                    controls.moveForward(-moveStep);
+                    if (checkCollision(camera.position)) controls.moveForward(moveStep);
+                }
+                if (moveRight) {
+                    controls.moveRight(moveStep);
+                    if (checkCollision(camera.position)) controls.moveRight(-moveStep);
+                }
+                if (moveLeft) {
+                    controls.moveRight(-moveStep);
+                    if (checkCollision(camera.position)) controls.moveRight(moveStep);
+                }
 
-                const camObj = controls.getObject();
-                const oldPos = camObj.position.clone();
-
-                camObj.position.x += moveDir.x * speed * delta;
-                if (checkCollision(camObj.position)) camObj.position.x = oldPos.x;
-                
-                camObj.position.z += moveDir.z * speed * delta;
-                if (checkCollision(camObj.position)) camObj.position.z = oldPos.z;
-
+                // Gravity & Vertical Physics
                 velocity.y -= gravity * delta;
-                camObj.position.y += velocity.y * delta;
+                camera.position.y += velocity.y * delta;
                 
-                if (checkCollision(camObj.position)) {
+                if (checkCollision(camera.position)) {
                     if (velocity.y < 0) { 
                         canJump = true; 
-                        camObj.position.y = Math.floor(camObj.position.y - 1.5) + 0.5 + 1.501; 
+                        camera.position.y = Math.floor(camera.position.y - 1.5) + 0.5 + 1.501; 
                     }
                     velocity.y = 0;
                 } else {
                     canJump = false;
                 }
 
-                if (camObj.position.y < -10) {
-                    velocity.y = 0; camObj.position.set(CHUNK_SIZE / 2, WORLD_HEIGHT + 5, CHUNK_SIZE / 2);
+                if (camera.position.y < -10) {
+                    velocity.y = 0; camera.position.set(CHUNK_SIZE / 2, WORLD_HEIGHT + 5, CHUNK_SIZE / 2);
                 }
                 
-                // Update Coordinate HUD Display (showing player block position)
-                coordDisplay.innerText = `X: ${Math.floor(camObj.position.x)} | Y: ${Math.floor(camObj.position.y - 1.5)} | Z: ${Math.floor(camObj.position.z)}`;
+                coordDisplay.innerText = `X: ${Math.floor(camera.position.x)} | Y: ${Math.floor(camera.position.y - 1.5)} | Z: ${Math.floor(camera.position.z)}`;
 
                 const target = getTargetBlock();
                 if (target) { blockOutline.visible = true; blockOutline.position.copy(target.position); }
