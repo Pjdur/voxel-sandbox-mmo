@@ -78,7 +78,8 @@
     <div id="coordinates">X: 0 | Y: 0 | Z: 0</div>
     <div id="instructions" style="display: none;">
         <strong>Controls:</strong><br>W, A, S, D - Move<br>Space - Jump<br>
-        Left Click - Break Block<br>Right Click - Place Block<br>1-5 - Select Block Type<br>S - Save Game | L - Load Game
+        Left Click - Break Block | Right Click - Place Block<br>
+        Hold Click - Break/Place Continuously<br>1-5 - Select Block Type<br>S - Save Game | L - Load Game
     </div>
     
     <div id="hud-controls">
@@ -457,13 +458,18 @@
             return null;
         }
 
-        document.addEventListener('mousedown', (e) => {
-            if (!controls.isLocked) return;
+        // Continuous block breaking/placing state variables
+        let isMouseDown = false;
+        let mouseButton = null;
+        let actionTimer = 0;
+        const actionInterval = 0.15; // Time delay (in seconds) between continuous block actions
+
+        function executeBlockAction(button) {
             const target = getTargetBlock();
             if (target) {
-                if (e.button === 0) { 
+                if (button === 0) { 
                     setBlock(target.position.x, target.position.y, target.position.z, BLOCK.AIR);
-                } else if (e.button === 2) { 
+                } else if (button === 2) { 
                     const px = target.position.x + target.normal.x;
                     const py = target.position.y + target.normal.y;
                     const pz = target.position.z + target.normal.z;
@@ -474,7 +480,22 @@
                     if (py < WORLD_HEIGHT && py >= 0) setBlock(px, py, pz, currentBlockSelection);
                 }
             }
+        }
+
+        document.addEventListener('mousedown', (e) => {
+            if (!controls.isLocked) return;
+            if (e.target.closest('#hud-controls') || e.target.closest('#block-selector')) return;
+            isMouseDown = true;
+            mouseButton = e.button;
+            actionTimer = 0;
+            executeBlockAction(mouseButton);
         });
+
+        document.addEventListener('mouseup', () => {
+            isMouseDown = false;
+            mouseButton = null;
+        });
+
         document.addEventListener('contextmenu', e => e.preventDefault());
 
         function checkCollision(pos) {
@@ -499,7 +520,6 @@
             prevTime = time;
 
             if (controls.isLocked) {
-                // FIX: Use PointerLockControls built-in native relative movement functions
                 const moveStep = speed * delta;
 
                 if (moveForward) {
@@ -517,6 +537,15 @@
                 if (moveLeft) {
                     controls.moveRight(-moveStep);
                     if (checkCollision(camera.position)) controls.moveRight(moveStep);
+                }
+
+                // Handle continuous building / breaking if mouse button is held down
+                if (isMouseDown) {
+                    actionTimer += delta;
+                    if (actionTimer >= actionInterval) {
+                        actionTimer = 0;
+                        executeBlockAction(mouseButton);
+                    }
                 }
 
                 // Gravity & Vertical Physics
