@@ -458,11 +458,12 @@
             return null;
         }
 
-        // Continuous block breaking/placing state variables
+        // Continuous block breaking/placing state variables with distinct slower speeds
         let isMouseDown = false;
         let mouseButton = null;
         let actionTimer = 0;
-        const actionInterval = 0.15; // Time delay (in seconds) between continuous block actions
+        const breakInterval = 0.3; // Slower continuous breaking (seconds)
+        const placeInterval = 0.5; // Even slower continuous placing (seconds)
 
         function executeBlockAction(button) {
             const target = getTargetBlock();
@@ -539,10 +540,11 @@
                     if (checkCollision(camera.position)) controls.moveRight(moveStep);
                 }
 
-                // Handle continuous building / breaking if mouse button is held down
+                // Handle continuous building / breaking with separate intervals
                 if (isMouseDown) {
                     actionTimer += delta;
-                    if (actionTimer >= actionInterval) {
+                    const currentInterval = (mouseButton === 0) ? breakInterval : placeInterval;
+                    if (actionTimer >= currentInterval) {
                         actionTimer = 0;
                         executeBlockAction(mouseButton);
                     }
