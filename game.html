@@ -34,6 +34,13 @@
             background-color: rgba(0, 0, 0, 0.5); padding: 15px;
             border-radius: 8px; font-size: 14px; pointer-events: none;
         }
+        #coordinates {
+            position: absolute; top: 20px; left: 20px; color: white;
+            background-color: rgba(0, 0, 0, 0.5); padding: 10px 14px;
+            border-radius: 8px; font-family: monospace; font-size: 14px;
+            pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            display: none;
+        }
         #hud-controls {
             position: absolute; top: 20px; right: 20px; display: flex; gap: 10px;
             pointer-events: auto;
@@ -68,6 +75,7 @@
 
     <div id="ui"><h1 id="start-msg">Click to Play</h1></div>
     <div id="crosshair" style="display: none;"></div>
+    <div id="coordinates">X: 0 | Y: 0 | Z: 0</div>
     <div id="instructions" style="display: none;">
         <strong>Controls:</strong><br>W, A, S, D - Move<br>Space - Jump<br>
         Left Click - Break Block<br>Right Click - Place Block<br>1-5 - Select Block Type<br>S - Save Game | L - Load Game
@@ -143,9 +151,8 @@
         const blockGeometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
 
         const world = new Map();
-        const savedModifications = {}; // Keeps track of blocks placed/broken by player
+        const savedModifications = {}; 
         
-        // Seeded random function for deterministic terrain generation
         function seededRandom(seed) {
             return function() {
                 let t = seed += 0x6D2B79F5;
@@ -154,7 +161,7 @@
                 return ((t ^ t >>> 14) >>> 0) / 4294967296;
             }
         }
-        const myWorldSeed = seededRandom(12345); // Fixed seed
+        const myWorldSeed = seededRandom(12345); 
         const simplex = new SimplexNoise(myWorldSeed);
         
         const dummy = new THREE.Object3D();
@@ -175,8 +182,6 @@
                         else if (y < height - 1) chunkData[index] = BLOCK.DIRT;
                         else if (y === height - 1) {
                             chunkData[index] = BLOCK.GRASS;
-                            
-                            // Deterministic tree placement based on coordinates
                             const treeRandom = Math.abs(Math.sin(gx * 12.9898 + gz * 78.233)) % 1;
                             if (treeRandom < 0.02 && x > 2 && x < CHUNK_SIZE-2 && z > 2 && z < CHUNK_SIZE-2) {
                                 generateTree(cx, cz, x, y + 1, z, chunkData);
@@ -186,7 +191,6 @@
                 }
             }
 
-            // Apply any saved modifications that fall within this chunk
             for (let key in savedModifications) {
                 const [gx, gy, gz] = key.split(',').map(Number);
                 const pcx = Math.floor(gx / CHUNK_SIZE), pcz = Math.floor(gz / CHUNK_SIZE);
@@ -203,7 +207,6 @@
         }
 
         function generateTree(cx, cz, lx, ly, lz, chunkData) {
-            // Predictable tree height
             const treeHeight = 4 + (Math.abs(lx * lz) % 3);
             for(let i=0; i<treeHeight; i++) {
                 if (ly + i < WORLD_HEIGHT) chunkData[lx + (lz * CHUNK_SIZE) + ((ly + i) * CHUNK_SIZE * CHUNK_SIZE)] = BLOCK.WOOD;
@@ -237,23 +240,17 @@
 
         function setBlock(gx, gy, gz, type) {
             if (gy < 0 || gy >= WORLD_HEIGHT) return;
-            
-            // Record modification for saving
             savedModifications[`${gx},${gy},${gz}`] = type;
-
             const cx = Math.floor(gx / CHUNK_SIZE), cz = Math.floor(gz / CHUNK_SIZE);
             const key = getChunkKey(cx, cz);
             if (!world.has(key)) return;
-            
             const chunkObj = world.get(key);
             let lx = gx % CHUNK_SIZE; if (lx < 0) lx += CHUNK_SIZE;
             let lz = gz % CHUNK_SIZE; if (lz < 0) lz += CHUNK_SIZE;
             chunkObj.data[lx + (lz * CHUNK_SIZE) + (gy * CHUNK_SIZE * CHUNK_SIZE)] = type;
-            
             buildChunkMesh(cx, cz);
         }
 
-        // Save & Load Functions
         function saveGame() {
             const camObj = controls.getObject();
             const saveData = {
@@ -270,25 +267,20 @@
             if (savedData) {
                 const parsed = JSON.parse(savedData);
                 for (let k in savedModifications) delete savedModifications[k];
-                
-                // Backwards compatibility check for older saves that only had block data
                 if (parsed.blocks) {
                     Object.assign(savedModifications, parsed.blocks);
                     if (parsed.playerPos) {
                         const camObj = controls.getObject();
                         camObj.position.set(parsed.playerPos.x, parsed.playerPos.y, parsed.playerPos.z);
-                        velocity.set(0,0,0); // reset velocity so you don't fall immediately
+                        velocity.set(0,0,0);
                     }
                 } else {
                     Object.assign(savedModifications, parsed);
                 }
-
-                // Clear loaded chunks to force them to regenerate with modifications
                 world.clear();
                 chunkGroup.clear();
                 lastChunkX = null; lastChunkZ = null;
                 updateChunksIfNeeded();
-                
                 console.log("Game Loaded!");
                 alert("World Loaded Successfully!");
             } else {
@@ -296,11 +288,9 @@
             }
         }
 
-        // Hook up save/load buttons
         document.getElementById('save-btn').addEventListener('click', saveGame);
         document.getElementById('load-btn').addEventListener('click', loadGame);
 
-        // Chunk-based Rendering
         const chunkGroup = new THREE.Group();
         scene.add(chunkGroup);
 
@@ -381,7 +371,6 @@
 
         const controls = new THREE.PointerLockControls(camera, document.body);
         document.body.addEventListener('click', (e) => {
-            // Prevent capturing click if clicking UI buttons
             if (e.target.closest('#hud-controls') || e.target.closest('#block-selector')) return;
             if (!controls.isLocked) controls.lock();
         }, false);
@@ -389,6 +378,7 @@
         controls.addEventListener('lock', () => {
             document.getElementById('ui').style.display = 'none';
             document.getElementById('crosshair').style.display = 'block';
+            document.getElementById('coordinates').style.display = 'block';
             document.getElementById('instructions').style.display = 'block';
             document.getElementById('block-selector').style.display = 'flex';
         });
@@ -397,6 +387,7 @@
             document.getElementById('ui').style.display = 'block';
             document.getElementById('start-msg').innerText = "Click to Resume";
             document.getElementById('crosshair').style.display = 'none';
+            document.getElementById('coordinates').style.display = 'none';
             document.getElementById('instructions').style.display = 'none';
             document.getElementById('block-selector').style.display = 'none';
         });
@@ -417,7 +408,7 @@
                 case 'KeyA': moveLeft = true; break;
                 case 'KeyS': if (controls.isLocked) moveBackward = true; break;
                 case 'KeyD': moveRight = true; break;
-                case 'KeyL': if (controls.isLocked) loadGame(); break; // Allow L shortcut if locked
+                case 'KeyL': if (controls.isLocked) loadGame(); break; 
                 case 'Space': if (canJump) { velocity.y = jumpVelocity; canJump = false; } break;
                 case 'Digit1': selectBlock(BLOCK.DIRT, 'opt-dirt'); break;
                 case 'Digit2': selectBlock(BLOCK.GRASS, 'opt-grass'); break;
@@ -500,7 +491,9 @@
             return false;
         }
 
+        const coordDisplay = document.getElementById('coordinates');
         let prevTime = performance.now();
+
         function animate() {
             requestAnimationFrame(animate);
             const time = performance.now();
@@ -544,6 +537,9 @@
                     velocity.y = 0; camObj.position.set(CHUNK_SIZE / 2, WORLD_HEIGHT + 5, CHUNK_SIZE / 2);
                 }
                 
+                // Update Coordinate HUD Display (showing player block position)
+                coordDisplay.innerText = `X: ${Math.floor(camObj.position.x)} | Y: ${Math.floor(camObj.position.y - 1.5)} | Z: ${Math.floor(camObj.position.z)}`;
+
                 const target = getTargetBlock();
                 if (target) { blockOutline.visible = true; blockOutline.position.copy(target.position); }
                 else blockOutline.visible = false;
