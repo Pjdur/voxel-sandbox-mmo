@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voxel Sandbox</title>
+    <title>Voxel Sandbox - Multiplayer</title>
     <style>
         body {
             margin: 0;
@@ -113,6 +113,53 @@
         scene.add(dirLight);
 
         const BLOCK = { AIR: 0, DIRT: 1, GRASS: 2, STONE: 3, WOOD: 4, LEAVES: 5 };
+
+        // Initialize WebSocket connection (change 'localhost' to your local network IP when playing with others)
+        const socket = new WebSocket('ws://localhost:8080');
+        const otherPlayers = {};
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'init') {
+                Object.assign(savedModifications, data.blocks);
+                updateChunksIfNeeded();
+            } else if (data.type === 'move') {
+                let playerMesh = otherPlayers[data.id];
+                if (!playerMesh) {
+                    const geom = new THREE.BoxGeometry(0.6, 1.8, 0.6);
+                    const mat = new THREE.MeshLambertMaterial({ color: 0xff4500 });
+                    playerMesh = new THREE.Mesh(geom, mat);
+                    scene.add(playerMesh);
+                    otherPlayers[data.id] = playerMesh;
+                }
+                playerMesh.position.set(data.x, data.y - 0.75, data.z);
+                if (data.quaternion) {
+                    playerMesh.quaternion.set(
+                        data.quaternion._x,
+                        data.quaternion._y,
+                        data.quaternion._z,
+                        data.quaternion._w
+                    );
+                }
+            } else if (data.type === 'blockUpdate') {
+                savedModifications[`${data.x},${data.y},${data.z}`] = data.blockType;
+                const cx = Math.floor(data.x / CHUNK_SIZE), cz = Math.floor(data.z / CHUNK_SIZE);
+                const key = getChunkKey(cx, cz);
+                if (world.has(key)) {
+                    const chunkObj = world.get(key);
+                    let lx = data.x % CHUNK_SIZE; if (lx < 0) lx += CHUNK_SIZE;
+                    let lz = data.z % CHUNK_SIZE; if (lz < 0) lz += CHUNK_SIZE;
+                    chunkObj.data[lx + (lz * CHUNK_SIZE) + (data.y * CHUNK_SIZE * CHUNK_SIZE)] = data.blockType;
+                    buildChunkMesh(cx, cz);
+                }
+            } else if (data.type === 'disconnect') {
+                if (otherPlayers[data.id]) {
+                    scene.remove(otherPlayers[data.id]);
+                    delete otherPlayers[data.id];
+                }
+            }
+        };
 
         // Initialize Texture Loader
         const textureLoader = new THREE.TextureLoader();
@@ -458,18 +505,26 @@
             return null;
         }
 
-        // Continuous block breaking/placing state variables with distinct slower speeds
         let isMouseDown = false;
         let mouseButton = null;
         let actionTimer = 0;
-        const breakInterval = 0.3; // Slower continuous breaking (seconds)
-        const placeInterval = 0.5; // Even slower continuous placing (seconds)
+        const breakInterval = 0.3; 
+        const placeInterval = 0.5; 
 
         function executeBlockAction(button) {
             const target = getTargetBlock();
             if (target) {
                 if (button === 0) { 
                     setBlock(target.position.x, target.position.y, target.position.z, BLOCK.AIR);
+                    if (socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({
+                            type: 'blockUpdate',
+                            x: target.position.x,
+                            y: target.position.y,
+                            z: target.position.z,
+                            blockType: BLOCK.AIR
+                        }));
+                    }
                 } else if (button === 2) { 
                     const px = target.position.x + target.normal.x;
                     const py = target.position.y + target.normal.y;
@@ -478,7 +533,18 @@
                     const camX = camera.position.x, camY = camera.position.y - 1.5, camZ = camera.position.z;
                     if (Math.abs(camX - px) < 0.8 && py >= Math.floor(camY) && py <= camY + 1.5 && Math.abs(camZ - pz) < 0.8) return;
 
-                    if (py < WORLD_HEIGHT && py >= 0) setBlock(px, py, pz, currentBlockSelection);
+                    if (py < WORLD_HEIGHT && py >= 0) {
+                        setBlock(px, py, pz, currentBlockSelection);
+                        if (socket.readyState === WebSocket.OPEN) {
+                            socket.send(JSON.stringify({
+                                type: 'blockUpdate',
+                                x: px,
+                                y: py,
+                                z: pz,
+                                blockType: currentBlockSelection
+                            }));
+                        }
+                    }
                 }
             }
         }
@@ -521,6 +587,17 @@
             prevTime = time;
 
             if (controls.isLocked) {
+                // Send player position over WebSocket
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'move',
+                        x: camera.position.x,
+                        y: camera.position.y,
+                        z: camera.position.z,
+                        quaternion: camera.quaternion
+                    }));
+                }
+
                 const moveStep = speed * delta;
 
                 if (moveForward) {
@@ -540,7 +617,6 @@
                     if (checkCollision(camera.position)) controls.moveRight(moveStep);
                 }
 
-                // Handle continuous building / breaking with separate intervals
                 if (isMouseDown) {
                     actionTimer += delta;
                     const currentInterval = (mouseButton === 0) ? breakInterval : placeInterval;
@@ -550,7 +626,6 @@
                     }
                 }
 
-                // Gravity & Vertical Physics
                 velocity.y -= gravity * delta;
                 camera.position.y += velocity.y * delta;
                 
