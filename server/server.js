@@ -30,8 +30,6 @@ setInterval(() => {
         fs.writeFile(WORLD_FILE, JSON.stringify(worldModifications), (err) => {
             if (err) {
                 console.error("Failed to save world:", err);
-            } else {
-                console.log("World auto-saved.");
             }
         });
         worldHasChanged = false;
