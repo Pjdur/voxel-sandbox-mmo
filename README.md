@@ -1,4 +1,4 @@
-# Minecraft-like Voxel Game
+# Voxel Sandbox (Multiplayer)
 
 This project is a multiplayer version of https://github.com/Pjdur/voxel-sandbox, 
 using a Node.js Websocker server.
