@@ -1,3 +1,5 @@
+> The new app version is cross platform, and supports both single and multiplayer, all in one.
+
 # Voxel Sandbox (Multiplayer)
 
 This project is a multiplayer version of https://github.com/Pjdur/voxel-sandbox, 
