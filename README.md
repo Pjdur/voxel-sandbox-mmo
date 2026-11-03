@@ -1,4 +1,4 @@
-> The new app version is cross platform, and supports both single and multiplayer, all in one.
+> The [new app version](https://github.com/Pjdur/voxel-sandbox) is cross platform, and supports both single and multiplayer, all in one.
 
 # Voxel Sandbox (Multiplayer)
 
